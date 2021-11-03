@@ -1,0 +1,41 @@
+plugins {
+	id 'org.springframework.boot' version '2.5.6'
+	id 'io.spring.dependency-management' version '1.0.11.RELEASE'
+	id 'java'
+}
+
+group = 'com.shua'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '11'
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+	maven {
+		url "https://packages.jetbrains.team/maven/p/skija/maven"
+	}
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-webflux'
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'io.projectreactor:reactor-test'
+	if (project.hasProperty("linux")) {
+		implementation("org.jetbrains.skija:skija-linux:0.93.1")
+	} else if (project.hasProperty("macos")) {
+		implementation("org.jetbrains.skija:skija-macos-x64:0.93.4")
+	} else {
+		implementation("org.jetbrains.skija:skija-windows:0.93.4")
+	}
+}
+
+test {
+	useJUnitPlatform()
+}
