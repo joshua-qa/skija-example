@@ -48,13 +48,16 @@ public class MainService {
         Surface surface = Surface.makeRasterN32Premul(460, 460);
         int rowBytes = info.getWidth() * 4;
 
-        Pixmap pixmap = Pixmap.make(info, ByteBuffer.allocateDirect(info.getHeight() * rowBytes), rowBytes);
+        ByteBuffer directBuffer = ByteBuffer.allocateDirect(info.getHeight() * rowBytes);
+        Pixmap pixmap = Pixmap.make(info, directBuffer, rowBytes);
         image.scalePixels(pixmap, SamplingMode.LINEAR, false);
 
         surface.getCanvas().drawImage(Image.makeFromPixmap(pixmap), 0, 0);
         Data result = surface.makeImageSnapshot().encodeToData(EncodedImageFormat.JPEG, 70);
         Assert.notNull(result, "Result is null");
         ByteBuffer jpgBytes = result.toByteBuffer();
+        directBuffer.clear();
+        buffer.clear();
         stopWatch.stop();
         log.info("time : {}", stopWatch.getTotalTimeMillis());
         return DefaultDataBufferFactory.sharedInstance.wrap(jpgBytes);
