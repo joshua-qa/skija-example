@@ -28,7 +28,7 @@ public class MainService {
     public Mono<DataBuffer> convert(Mono<FilePart> filePartMono) {
         return filePartMono.flatMap(filePart -> DataBufferUtils.join(filePart.content()))
                 .publishOn(Schedulers.boundedElastic())
-                .map(dataBuffer -> convertInternal(dataBuffer.asByteBuffer()))
+                .map(dataBuffer -> resizeAndFillColor(dataBuffer.asByteBuffer()))
                 .onErrorMap(throwable -> new ImageProcessingException("이미지 처리 실패", throwable));
     }
 
@@ -39,7 +39,12 @@ public class MainService {
                 .onErrorMap(throwable -> new ImageProcessingException("이미지 처리 실패", throwable));
     }
 
-    private DataBuffer convertInternal(ByteBuffer buffer) {
+    /**
+     * 리사이징하기
+     * @param buffer image buffer (ByteBuffer)
+     * @return DataBuffer result
+     */
+    private DataBuffer resizeImage(ByteBuffer buffer) {
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
         Image image = Image.makeFromEncoded(buffer.array());
@@ -48,11 +53,44 @@ public class MainService {
         Surface surface = Surface.makeRasterN32Premul(460, 460);
         int rowBytes = info.getWidth() * 4;
 
-        ByteBuffer directBuffer = ByteBuffer.allocateDirect(info.getHeight() * rowBytes);
+        Data bufferData = Data.makeFromBytes(new byte[info.getHeight() * rowBytes]);
+        ByteBuffer directBuffer = bufferData.toByteBuffer();
         Pixmap pixmap = Pixmap.make(info, directBuffer, rowBytes);
         image.scalePixels(pixmap, SamplingMode.LINEAR, false);
 
         surface.getCanvas().drawImage(Image.makeFromPixmap(pixmap), 0, 0);
+        Data result = surface.makeImageSnapshot().encodeToData(EncodedImageFormat.JPEG, 70);
+        Assert.notNull(result, "Result is null");
+        ByteBuffer jpgBytes = result.toByteBuffer();
+        directBuffer.clear();
+        buffer.clear();
+        stopWatch.stop();
+        log.info("time : {}", stopWatch.getTotalTimeMillis());
+        return DefaultDataBufferFactory.sharedInstance.wrap(jpgBytes);
+    }
+
+    /**
+     * 리사이징하고 남는 공간은 흰색으로 채우기
+     * @param buffer image buffer (ByteBuffer)
+     * @return DataBuffer result
+     */
+    private DataBuffer resizeAndFillColor(ByteBuffer buffer) {
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start();
+        Image image = Image.makeFromEncoded(buffer.array());
+
+        ImageInfo info = ImageInfo.makeN32Premul(460, 460);
+        Surface surface = Surface.makeRasterN32Premul(640, 460);
+        int rowBytes = info.getWidth() * 4;
+
+        Data bufferData = Data.makeFromBytes(new byte[info.getHeight() * rowBytes]);
+        ByteBuffer directBuffer = bufferData.toByteBuffer();
+        Pixmap pixmap = Pixmap.make(info, directBuffer, rowBytes);
+        image.scalePixels(pixmap, SamplingMode.LINEAR, false);
+
+        Paint paint = new Paint();
+        paint.setColor(0xffffffff);
+        surface.getCanvas().drawPaint(paint).drawImage(Image.makeFromPixmap(pixmap), 90, 0);
         Data result = surface.makeImageSnapshot().encodeToData(EncodedImageFormat.JPEG, 70);
         Assert.notNull(result, "Result is null");
         ByteBuffer jpgBytes = result.toByteBuffer();
